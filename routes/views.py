@@ -85,3 +85,27 @@ def h5p_generator():
     return render_template('h5p.html',
                           course=course,
                           courses=courses)
+
+@views_bp.route('/video')
+def video_manager():
+    """Video content manager page"""
+    course_id = request.args.get('course_id')
+    
+    courses = Course.query.all()
+    course = None
+    
+    # Get videos filtered by course if course_id is provided
+    videos = []
+    if course_id:
+        course = Course.query.get(course_id)
+        videos = CourseContent.query.filter_by(
+            course_id=course_id,
+            content_type='video'
+        ).all()
+    else:
+        videos = CourseContent.query.filter_by(content_type='video').all()
+    
+    return render_template('video.html',
+                          course=course,
+                          courses=courses,
+                          videos=videos)

@@ -1,0 +1,360 @@
+{% extends 'base.html' %}
+
+{% block title %}Video Content Manager{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Video Content Manager</h1>
+    
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Upload Video</h5>
+                </div>
+                <div class="card-body">
+                    <form id="videoUploadForm" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label for="courseSelect" class="form-label">Course</label>
+                            <select class="form-select" id="courseSelect" name="course_id" required>
+                                <option value="" selected disabled>Select a course</option>
+                                {% for course in courses %}
+                                <option value="{{ course.id }}">{{ course.title }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="videoTitle" class="form-label">Video Title</label>
+                            <input type="text" class="form-control" id="videoTitle" name="title" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="videoFile" class="form-label">Video File</label>
+                            <input type="file" class="form-control" id="videoFile" name="video_file" accept="video/*" required>
+                            <div class="form-text">Upload MP4, AVI, or MOV files (max 100MB).</div>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary" id="uploadButton">
+                            Upload and Process
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Batch Processing</h5>
+                </div>
+                <div class="card-body">
+                    <form id="batchProcessForm">
+                        <div class="mb-3">
+                            <label for="batchCourseSelect" class="form-label">Course</label>
+                            <select class="form-select" id="batchCourseSelect" name="course_id" required>
+                                <option value="" selected disabled>Select a course</option>
+                                {% for course in courses %}
+                                <option value="{{ course.id }}">{{ course.title }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-secondary" id="batchButton">
+                            Process All Videos
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Video Content</h5>
+                    <div>
+                        <select class="form-select form-select-sm" id="coursesFilter">
+                            <option value="all">All Courses</option>
+                            {% for course in courses %}
+                            <option value="{{ course.id }}">{{ course.title }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="videoList" class="list-group">
+                        {% if videos %}
+                            {% for video in videos %}
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-1">{{ video.title }}</h6>
+                                    <span class="badge bg-primary">{{ video.course.title }}</span>
+                                </div>
+                                <p class="mb-1 text-muted small">{{ video.url }}</p>
+                                <div class="d-flex justify-content-between align-items-center mt-2">
+                                    <button class="btn btn-sm btn-outline-info view-transcript" data-id="{{ video.id }}">
+                                        View Transcript
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-secondary process-video" data-id="{{ video.id }}">
+                                        Re-Process
+                                    </button>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <p class="text-muted">No video content available.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Transcript Modal -->
+    <div class="modal fade" id="transcriptModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="transcriptTitle">Video Transcript</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="transcriptContent" class="p-3 border rounded bg-light">
+                        <p class="text-muted">Loading transcript...</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Status Alert -->
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+        <div id="statusAlert" class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body" id="statusMessage">
+                    Operation successful!
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const transcriptModal = new bootstrap.Modal(document.getElementById('transcriptModal'));
+        const statusToast = new bootstrap.Toast(document.getElementById('statusAlert'));
+        const statusAlert = document.getElementById('statusAlert');
+        const statusMessage = document.getElementById('statusMessage');
+        
+        // Handle video upload
+        document.getElementById('videoUploadForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const uploadButton = document.getElementById('uploadButton');
+            
+            // Validate file size
+            const videoFile = document.getElementById('videoFile').files[0];
+            if (videoFile && videoFile.size > 100 * 1024 * 1024) {
+                showStatus('File size exceeds 100MB limit.', 'danger');
+                return;
+            }
+            
+            // Show loading state
+            uploadButton.disabled = true;
+            uploadButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Uploading...';
+            
+            fetch('/api/transcription/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success' || data.status === 'partial') {
+                    showStatus(data.message, data.status === 'success' ? 'success' : 'warning');
+                    this.reset();
+                    
+                    // Refresh video list
+                    refreshVideoList();
+                } else {
+                    showStatus(data.message, 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error uploading video:', error);
+                showStatus('Failed to upload video.', 'danger');
+            })
+            .finally(() => {
+                uploadButton.disabled = false;
+                uploadButton.textContent = 'Upload and Process';
+            });
+        });
+        
+        // Handle batch processing
+        document.getElementById('batchProcessForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const courseId = document.getElementById('batchCourseSelect').value;
+            const batchButton = document.getElementById('batchButton');
+            
+            if (!courseId) {
+                showStatus('Please select a course.', 'danger');
+                return;
+            }
+            
+            // Show loading state
+            batchButton.disabled = true;
+            batchButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
+            
+            fetch(`/api/transcription/batch-process/${courseId}`, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success' || data.status === 'partial') {
+                    showStatus(data.message, data.status === 'success' ? 'success' : 'warning');
+                    
+                    // Refresh video list
+                    refreshVideoList();
+                } else {
+                    showStatus(data.message, 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error processing videos:', error);
+                showStatus('Failed to process videos.', 'danger');
+            })
+            .finally(() => {
+                batchButton.disabled = false;
+                batchButton.textContent = 'Process All Videos';
+            });
+        });
+        
+        // Handle course filter change
+        document.getElementById('coursesFilter').addEventListener('change', function() {
+            refreshVideoList(this.value);
+        });
+        
+        // Delegate click handler for view transcript buttons
+        document.getElementById('videoList').addEventListener('click', function(e) {
+            if (e.target.classList.contains('view-transcript')) {
+                const contentId = e.target.getAttribute('data-id');
+                openTranscriptModal(contentId);
+            } else if (e.target.classList.contains('process-video')) {
+                const contentId = e.target.getAttribute('data-id');
+                processVideo(contentId);
+            }
+        });
+        
+        // Function to open transcript modal
+        function openTranscriptModal(contentId) {
+            const transcriptContent = document.getElementById('transcriptContent');
+            transcriptContent.innerHTML = '<p class="text-muted">Loading transcript...</p>';
+            
+            transcriptModal.show();
+            
+            fetch(`/api/content/${contentId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('transcriptTitle').textContent = data.content.title + ' - Transcript';
+                        
+                        if (data.content.content_text) {
+                            transcriptContent.innerHTML = `<p>${data.content.content_text}</p>`;
+                        } else {
+                            transcriptContent.innerHTML = '<p class="text-muted">No transcript available. Try processing the video first.</p>';
+                        }
+                    } else {
+                        transcriptContent.innerHTML = `<p class="text-danger">${data.message || 'Failed to load transcript.'}</p>`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading transcript:', error);
+                    transcriptContent.innerHTML = '<p class="text-danger">Error loading transcript.</p>';
+                });
+        }
+        
+        // Function to process a video
+        function processVideo(contentId) {
+            fetch(`/api/transcription/process/${contentId}`, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus('Video processed successfully.', 'success');
+                    refreshVideoList();
+                } else {
+                    showStatus(data.message, 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error processing video:', error);
+                showStatus('Failed to process video.', 'danger');
+            });
+        }
+        
+        // Function to refresh the video list
+        function refreshVideoList(courseId = 'all') {
+            const videoList = document.getElementById('videoList');
+            videoList.innerHTML = '<p class="text-muted">Loading videos...</p>';
+            
+            let url = '/api/videos';
+            if (courseId !== 'all') {
+                url += `?course_id=${courseId}`;
+            }
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.videos && data.videos.length > 0) {
+                        videoList.innerHTML = '';
+                        
+                        data.videos.forEach(video => {
+                            const item = document.createElement('div');
+                            item.className = 'list-group-item';
+                            item.innerHTML = `
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-1">${video.title}</h6>
+                                    <span class="badge bg-primary">${video.course_title}</span>
+                                </div>
+                                <p class="mb-1 text-muted small">${video.url || ''}</p>
+                                <div class="d-flex justify-content-between align-items-center mt-2">
+                                    <button class="btn btn-sm btn-outline-info view-transcript" data-id="${video.id}">
+                                        View Transcript
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-secondary process-video" data-id="${video.id}">
+                                        Re-Process
+                                    </button>
+                                </div>
+                            `;
+                            videoList.appendChild(item);
+                        });
+                    } else {
+                        videoList.innerHTML = '<p class="text-muted">No video content available.</p>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading videos:', error);
+                    videoList.innerHTML = '<p class="text-danger">Failed to load videos.</p>';
+                });
+        }
+        
+        // Function to show status message
+        function showStatus(message, status) {
+            statusMessage.textContent = message;
+            statusAlert.className = `toast align-items-center text-white bg-${status} border-0`;
+            statusToast.show();
+        }
+        
+        // Initialize with videos if available
+        if (document.getElementById('videoList').children.length === 0) {
+            refreshVideoList();
+        }
+    });
+</script>
+{% endblock %}

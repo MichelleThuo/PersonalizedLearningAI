@@ -1,11 +1,15 @@
 import json
 import logging
+import os
 from flask import Blueprint, request, jsonify, current_app
+from werkzeug.utils import secure_filename
 from models import ChatSession, ChatMessage, Course, CourseContent
 from services.openai_service import OpenAIService
 from services.search_service import SearchService
 from services.quiz_service import QuizService
 from services.recommendation_service import RecommendationService
+from services.transcription_service import TranscriptionService
+from services.vector_db_service import VectorDBService
 from app import db
 
 logger = logging.getLogger(__name__)
@@ -15,6 +19,8 @@ openai_service = OpenAIService()
 search_service = SearchService()
 quiz_service = QuizService()
 recommendation_service = RecommendationService()
+transcription_service = TranscriptionService()
+vector_db_service = VectorDBService()
 
 @api_bp.route('/chat', methods=['POST'])
 def chat():
@@ -307,3 +313,212 @@ def generate_learning_path():
     except Exception as e:
         logger.error(f"Error in generate_learning_path endpoint: {str(e)}")
         return jsonify({'error': 'An error occurred generating the learning path'}), 500
+
+@api_bp.route('/videos', methods=['GET'])
+def get_videos():
+    """API endpoint for getting video content"""
+    try:
+        course_id = request.args.get('course_id')
+        
+        # Filter videos by course if course_id is provided
+        if course_id:
+            try:
+                course_id = int(course_id)
+                videos = CourseContent.query.filter_by(
+                    course_id=course_id,
+                    content_type='video'
+                ).all()
+            except ValueError:
+                return jsonify({'error': 'Invalid course ID'}), 400
+        else:
+            videos = CourseContent.query.filter_by(content_type='video').all()
+        
+        # Format video data for frontend
+        video_list = []
+        for video in videos:
+            course = Course.query.get(video.course_id)
+            video_list.append({
+                'id': video.id,
+                'title': video.title,
+                'url': video.url,
+                'course_id': video.course_id,
+                'course_title': course.title if course else 'Unknown Course',
+                'has_transcript': bool(video.content_text)
+            })
+        
+        return jsonify({
+            'videos': video_list
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in get_videos endpoint: {str(e)}")
+        return jsonify({'error': 'An error occurred retrieving videos'}), 500
+
+@api_bp.route('/content/<int:content_id>', methods=['GET'])
+def get_content(content_id):
+    """API endpoint for getting specific content details"""
+    try:
+        content = CourseContent.query.get(content_id)
+        if not content:
+            return jsonify({'error': 'Content not found'}), 404
+        
+        course = Course.query.get(content.course_id)
+        
+        content_data = {
+            'id': content.id,
+            'title': content.title,
+            'content_type': content.content_type,
+            'course_id': content.course_id,
+            'course_title': course.title if course else 'Unknown Course',
+            'url': content.url,
+            'content_text': content.content_text
+        }
+        
+        return jsonify({
+            'status': 'success',
+            'content': content_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in get_content endpoint: {str(e)}")
+        return jsonify({'error': 'An error occurred retrieving content'}), 500
+
+@api_bp.route('/transcription/upload', methods=['POST'])
+def upload_video():
+    """API endpoint for uploading and processing a video file"""
+    try:
+        if 'video_file' not in request.files:
+            return jsonify({'status': 'error', 'message': 'No video file provided'}), 400
+        
+        video_file = request.files['video_file']
+        course_id = request.form.get('course_id')
+        title = request.form.get('title')
+        
+        if not video_file.filename:
+            return jsonify({'status': 'error', 'message': 'Empty file submitted'}), 400
+        
+        if not course_id or not title:
+            return jsonify({'status': 'error', 'message': 'Course ID and title are required'}), 400
+        
+        # Validate course exists
+        course = Course.query.get(course_id)
+        if not course:
+            return jsonify({'status': 'error', 'message': 'Course not found'}), 404
+        
+        # Create uploads directory if it doesn't exist
+        upload_dir = os.path.join(current_app.root_path, 'static', 'uploads', 'videos')
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        # Secure filename and save the file
+        filename = secure_filename(video_file.filename)
+        file_path = os.path.join(upload_dir, filename)
+        video_file.save(file_path)
+        
+        # Create database entry for the video
+        video_content = CourseContent(
+            course_id=course_id,
+            title=title,
+            content_type='video',
+            url=os.path.join('static', 'uploads', 'videos', filename)
+        )
+        db.session.add(video_content)
+        db.session.commit()
+        
+        # Process the video (transcription) in the background
+        # For now, we'll process immediately, but this could be moved to a background task
+        success = transcription_service.process_video_content(video_content.id)
+        
+        if success:
+            # Index the transcribed content in the vector database
+            vector_db_service.index_content(video_content.id)
+            return jsonify({
+                'status': 'success',
+                'message': 'Video uploaded and processed successfully',
+                'content_id': video_content.id
+            })
+        else:
+            return jsonify({
+                'status': 'partial',
+                'message': 'Video uploaded but transcription failed. You can retry processing later.',
+                'content_id': video_content.id
+            })
+        
+    except Exception as e:
+        logger.error(f"Error in upload_video endpoint: {str(e)}")
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': f'An error occurred: {str(e)}'}), 500
+
+@api_bp.route('/transcription/process/<int:content_id>', methods=['POST'])
+def process_video(content_id):
+    """API endpoint for processing an existing video"""
+    try:
+        content = CourseContent.query.get(content_id)
+        if not content:
+            return jsonify({'status': 'error', 'message': 'Content not found'}), 404
+        
+        if content.content_type != 'video':
+            return jsonify({'status': 'error', 'message': 'Content is not a video'}), 400
+        
+        # Process the video
+        success = transcription_service.process_video_content(content_id)
+        
+        if success:
+            # Index the transcribed content in the vector database
+            vector_db_service.index_content(content_id)
+            return jsonify({
+                'status': 'success',
+                'message': 'Video processed successfully'
+            })
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': 'Failed to process video'
+            }), 500
+        
+    except Exception as e:
+        logger.error(f"Error in process_video endpoint: {str(e)}")
+        return jsonify({'status': 'error', 'message': f'An error occurred: {str(e)}'}), 500
+
+@api_bp.route('/transcription/batch-process/<int:course_id>', methods=['POST'])
+def batch_process_videos(course_id):
+    """API endpoint for batch processing all videos in a course"""
+    try:
+        course = Course.query.get(course_id)
+        if not course:
+            return jsonify({'status': 'error', 'message': 'Course not found'}), 404
+        
+        # Get all videos for the course
+        videos = CourseContent.query.filter_by(
+            course_id=course_id,
+            content_type='video'
+        ).all()
+        
+        if not videos:
+            return jsonify({'status': 'error', 'message': 'No videos found for this course'}), 404
+        
+        # Process each video
+        processed = 0
+        for video in videos:
+            if transcription_service.process_video_content(video.id):
+                vector_db_service.index_content(video.id)
+                processed += 1
+        
+        if processed == len(videos):
+            return jsonify({
+                'status': 'success',
+                'message': f'All {processed} videos processed successfully'
+            })
+        elif processed > 0:
+            return jsonify({
+                'status': 'partial',
+                'message': f'Processed {processed} out of {len(videos)} videos'
+            })
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': 'Failed to process any videos'
+            }), 500
+        
+    except Exception as e:
+        logger.error(f"Error in batch_process_videos endpoint: {str(e)}")
+        return jsonify({'status': 'error', 'message': f'An error occurred: {str(e)}'}), 500
