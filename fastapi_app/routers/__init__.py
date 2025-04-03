@@ -5,6 +5,7 @@ from . import (
     search,
     quiz,
     courses, 
-    transcription, 
-    vector_search
+    transcription,
+    simple_vector_search
+    # vector_search  # Disabled due to llama_index dependency issues
 )

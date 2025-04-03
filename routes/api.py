@@ -10,6 +10,7 @@ from services.quiz_service import QuizService
 from services.recommendation_service import RecommendationService
 from services.transcription_service import TranscriptionService
 from services.vector_db_service import VectorDBService
+from fastapi_app.services.simple_vector_db import vector_db_service as simple_vector_db_service
 from app import db
 
 logger = logging.getLogger(__name__)
@@ -522,3 +523,21 @@ def batch_process_videos(course_id):
     except Exception as e:
         logger.error(f"Error in batch_process_videos endpoint: {str(e)}")
         return jsonify({'status': 'error', 'message': f'An error occurred: {str(e)}'}), 500
+
+@api_bp.route('/vector-db/status', methods=['GET'])
+def vector_db_status():
+    """API endpoint for checking the status of the vector database (Pinecone)"""
+    try:
+        # Check status of the simple vector database service
+        status = simple_vector_db_service.get_status()
+        return jsonify({
+            'status': 'success',
+            'vector_db': status
+        })
+        
+    except Exception as e:
+        logger.error(f"Error checking vector database status: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Error checking vector database status: {str(e)}'
+        }), 500

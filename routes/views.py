@@ -109,3 +109,8 @@ def video_manager():
                           course=course,
                           courses=courses,
                           videos=videos)
+
+@views_bp.route('/vector-status')
+def vector_db_status_page():
+    """Vector database status page"""
+    return render_template('vector_status.html')

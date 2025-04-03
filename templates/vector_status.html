@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+
+{% block title %}Vector Database Status - Moodle AI Learning Assistant{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">Vector Database Status</h1>
+        <p class="lead">This page displays the current status of the Pinecone vector database service.</p>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card bg-dark">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Pinecone Status</h5>
+            </div>
+            <div class="card-body">
+                <div id="status-loading" class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Checking vector database status...</p>
+                </div>
+                <div id="status-content" class="d-none">
+                    <table class="table table-dark">
+                        <tbody id="status-table">
+                            <!-- Status details will be populated here -->
+                        </tbody>
+                    </table>
+                    
+                    <div class="mt-4">
+                        <h5>Raw Response:</h5>
+                        <pre id="status-json" class="bg-dark text-light p-3 rounded" style="max-height: 300px; overflow-y: auto;">
+                            <!-- Raw JSON response will be displayed here -->
+                        </pre>
+                    </div>
+                </div>
+                <div id="status-error" class="alert alert-danger d-none">
+                    <h5>Error checking vector database status:</h5>
+                    <p id="status-error-message"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Fetch vector database status
+        fetch('/api/vector-db/status')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Error ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Hide loading spinner
+                document.getElementById('status-loading').classList.add('d-none');
+                
+                // Show content
+                document.getElementById('status-content').classList.remove('d-none');
+                
+                // Display raw JSON
+                document.getElementById('status-json').textContent = JSON.stringify(data, null, 2);
+                
+                // Format and display status details in table
+                const statusTable = document.getElementById('status-table');
+                
+                if (data.status === 'success' && data.vector_db) {
+                    const vectorDb = data.vector_db;
+                    
+                    // Add rows for each main property
+                    addStatusRow(statusTable, 'Status', vectorDb.initialized ? 
+                        '<span class="badge bg-success">Connected</span>' : 
+                        '<span class="badge bg-danger">Disconnected</span>');
+                    
+                    addStatusRow(statusTable, 'API Key Available', vectorDb.pinecone_api_key_available ? 
+                        '<span class="badge bg-success">Yes</span>' : 
+                        '<span class="badge bg-danger">No</span>');
+                    addStatusRow(statusTable, 'Index Name', vectorDb.index_name || 'N/A');
+                    addStatusRow(statusTable, 'Vector Dimension', vectorDb.dimension || 'N/A');
+                    addStatusRow(statusTable, 'Cloud Provider', vectorDb.cloud || 'N/A');
+                    addStatusRow(statusTable, 'Region', vectorDb.region || 'N/A');
+                    
+                    if (vectorDb.document_count !== undefined) {
+                        addStatusRow(statusTable, 'Total Vectors', vectorDb.document_count.toLocaleString());
+                    }
+                    
+                    if (vectorDb.namespaces) {
+                        const namespaces = Object.keys(vectorDb.namespaces);
+                        addStatusRow(statusTable, 'Namespaces', namespaces.join(', ') || 'None');
+                        
+                        // Add vectors per namespace
+                        namespaces.forEach(namespace => {
+                            const vectorCount = vectorDb.namespaces[namespace].vector_count;
+                            addStatusRow(statusTable, `Vectors in "${namespace}"`, vectorCount.toLocaleString());
+                        });
+                    }
+                } else {
+                    addStatusRow(statusTable, 'Status', 
+                        '<span class="badge bg-danger">Error</span>');
+                    addStatusRow(statusTable, 'Message', 'Could not retrieve vector database status');
+                }
+            })
+            .catch(error => {
+                // Hide loading spinner
+                document.getElementById('status-loading').classList.add('d-none');
+                
+                // Show error
+                document.getElementById('status-error').classList.remove('d-none');
+                document.getElementById('status-error-message').textContent = error.message;
+            });
+    });
+    
+    function addStatusRow(table, label, value) {
+        const row = document.createElement('tr');
+        const labelCell = document.createElement('th');
+        labelCell.setAttribute('scope', 'row');
+        labelCell.textContent = label;
+        
+        const valueCell = document.createElement('td');
+        if (typeof value === 'string' && value.includes('<')) {
+            valueCell.innerHTML = value;
+        } else {
+            valueCell.textContent = value;
+        }
+        
+        row.appendChild(labelCell);
+        row.appendChild(valueCell);
+        table.appendChild(row);
+    }
+</script>
+{% endblock %}
