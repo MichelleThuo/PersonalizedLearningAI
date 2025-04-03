@@ -1,14 +1,16 @@
 """Video transcription API router."""
 import logging
 import os
+import json
 import tempfile
 from pathlib import Path
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..schemas.transcription import (
     VideoProcessRequest, 
+    VideoUploadRequest,
     BatchProcessRequest, 
     BatchProcessResponse,
     VideoUploadResponse,
@@ -91,20 +93,14 @@ async def process_video(
 
 @router.post("/video/upload", response_model=VideoUploadResponse)
 async def upload_video(
-    file: UploadFile = File(...),
-    course_id: int = Form(...),
-    title: str = Form(...),
-    description: str = Form(None),
+    request: VideoUploadRequest,
     db: Session = Depends(get_db)
 ):
     """
-    Upload a video file and add it as course content.
+    Add a video by URL to course content.
     
     Args:
-        file: Video file
-        course_id: Course ID
-        title: Video title
-        description: Video description
+        request: Video upload request
         db: Database session
         
     Returns:
@@ -112,54 +108,40 @@ async def upload_video(
     """
     try:
         # Check if course exists
-        course = db.query(Course).filter(Course.id == course_id).first()
+        course = db.query(Course).filter(Course.id == request.course_id).first()
         if not course:
             raise HTTPException(
                 status_code=404,
-                detail=f"Course with ID {course_id} not found"
+                detail=f"Course with ID {request.course_id} not found"
             )
-            
-        # Create uploads directory if it doesn't exist
-        uploads_dir = Path("static/uploads")
-        uploads_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Create a unique filename
-        file_extension = os.path.splitext(file.filename)[1]
-        filename = f"video_{course_id}_{title.replace(' ', '_')}{file_extension}"
-        file_path = uploads_dir / filename
-        
-        # Save the file
-        with open(file_path, "wb") as buffer:
-            content = await file.read()
-            buffer.write(content)
             
         # Create content record
         video_content = CourseContent(
-            course_id=course_id,
-            title=title,
+            course_id=request.course_id,
+            title=request.title,
             content_type="video",
-            content_text=description,
-            url=f"/static/uploads/{filename}"
+            content_text=request.description or "",
+            url=request.video_url
         )
         db.add(video_content)
         db.commit()
         
         return VideoUploadResponse(
             content_id=video_content.id,
-            title=title,
-            course_id=course_id,
+            title=request.title,
+            course_id=request.course_id,
             status="uploaded",
-            message=f"Video uploaded successfully: {title}"
+            message=f"Video added successfully: {request.title}"
         )
     except HTTPException:
         db.rollback()
         raise
     except Exception as e:
         db.rollback()
-        logger.error(f"Error uploading video: {str(e)}")
+        logger.error(f"Error adding video: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail=f"Error uploading video: {str(e)}"
+            detail=f"Error adding video: {str(e)}"
         )
 
 

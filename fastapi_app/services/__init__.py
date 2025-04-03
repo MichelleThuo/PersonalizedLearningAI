@@ -2,5 +2,5 @@
 # Import service modules
 from . import (
     search,
-    vector_db
+    simple_vector_db
 )

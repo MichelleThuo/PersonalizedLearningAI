@@ -8,6 +8,14 @@ class VideoProcessRequest(BaseModel):
     content_id: int = Field(..., description="Course content ID of the video to process")
 
 
+class VideoUploadRequest(BaseModel):
+    """Schema for video upload request."""
+    course_id: int = Field(..., description="Course ID")
+    title: str = Field(..., description="Video title")
+    description: Optional[str] = Field(None, description="Video description")
+    video_url: str = Field(..., description="URL to the video file")
+
+
 class VideoUploadResponse(BaseModel):
     """Schema for video upload response."""
     content_id: int = Field(..., description="Created content ID for the video")

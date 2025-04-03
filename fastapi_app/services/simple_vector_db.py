@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 PINECONE_API_KEY = os.environ.get("PINECONE_API_KEY")
 INDEX_NAME = "moodle-assistant"
 DIMENSION = 512  # Dimension for TF-IDF vectorizer
-CLOUD = "aws"  # AWS cloud for serverless
-REGION = "us-west-2"  # US West 2 region for serverless
+CLOUD = "aws"  # AWS cloud for serverless (free tier compatible)
+REGION = "us-east-1"  # us-east-1 region for serverless (free tier compatible)
 
 
 class SimpleVectorDBService:
