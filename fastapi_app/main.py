@@ -45,7 +45,7 @@ from .routers import (
     quiz, 
     courses, 
     transcription, 
-    vector_search
+    simple_vector_search as vector_search
 )
 
 # Include routers
@@ -81,3 +81,23 @@ async def health_check(db: Session = Depends(get_db)):
     except Exception as e:
         logger.error("Health check failed: %s", str(e))
         return {"status": "unhealthy", "database": "disconnected", "error": str(e)}
+
+@app.get("/services/status", tags=["services"])
+async def services_status():
+    """Check the status of external services."""
+    from .services.simple_vector_db import vector_db_service
+    
+    services = {
+        "pinecone": vector_db_service.get_status()
+    }
+    
+    # Check overall health
+    all_healthy = all(
+        service.get("initialized", False) 
+        for service in services.values()
+    )
+    
+    return {
+        "status": "healthy" if all_healthy else "degraded",
+        "services": services
+    }

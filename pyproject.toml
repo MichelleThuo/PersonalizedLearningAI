@@ -20,13 +20,13 @@ dependencies = [
     "pydub>=0.25.1",
     "scikit-learn>=1.6.1",
     "whisper>=1.1.10",
-    "pinecone>=6.0.2",
     "uvicorn>=0.34.0",
     "llama-index>=0.12.28",
-    "llama-index-vector-stores-pinecone>=0.4.5",
     "fastapi>=0.115.12",
     "pydantic>=2.11.1",
-    "pinecone-client==2.2.2",
+    "pinecone-client==2.2.1",
+    "pinecone>=6.0.2",
+    "llama-index-vector-stores-pinecone>=0.4.5",
 ]
 
 [[tool.uv.index]]

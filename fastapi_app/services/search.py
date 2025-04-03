@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from models import CourseContent, Course, SearchIndex
 
-from .vector_db import vector_db_service
+from .simple_vector_db import vector_db_service
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

@@ -1403,7 +1403,7 @@ wheels = [
 
 [[package]]
 name = "pinecone-client"
-version = "2.2.2"
+version = "2.2.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "dnspython" },
@@ -1416,9 +1416,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/56/c1/e06a324dc7c1329cf24753a75f8aff83f037845819af7c601ae448da5cc4/pinecone-client-2.2.2.tar.gz", hash = "sha256:391fe413754efd4e0ef00154b44271d63c4cdd4bedf088d23111a5725d863210", size = 96246 }
+sdist = { url = "https://files.pythonhosted.org/packages/25/af/2ea3b6f5498bc4618ad54b03ec00b4a3f2c4eda48839f119ca339984dc01/pinecone-client-2.2.1.tar.gz", hash = "sha256:0878dcaee447c46c8d1b3d71c854689daa7e548e5009a171780907c7d4e74789", size = 96153 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/98/17/3675b83dca0a032d2750bf04fbfdf78a6e46fa3056eefc2574cdd14661d9/pinecone_client-2.2.2-py3-none-any.whl", hash = "sha256:21fddb752668efee4d3c6b706346d9580e36a8b06b8d97afd60bd33ef2536e7e", size = 179097 },
+    { url = "https://files.pythonhosted.org/packages/43/f2/a6b15f7fed393cd81757ed1bc0a5c080af840b8e563d2bd1f818893f91ee/pinecone_client-2.2.1-py3-none-any.whl", hash = "sha256:6976a22aee57a9813378607506c8c36b0317dfa36a08a5397aaaeab2eef66c1b", size = 177204 },
 ]
 
 [[package]]
@@ -1815,7 +1815,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.2.4" },
     { name = "openai", specifier = ">=1.70.0" },
     { name = "pinecone", specifier = ">=6.0.2" },
-    { name = "pinecone-client", specifier = "==2.2.2" },
+    { name = "pinecone-client", specifier = "==2.2.1" },
     { name = "psycopg2-binary", specifier = ">=2.9.10" },
     { name = "pydantic", specifier = ">=2.11.1" },
     { name = "pydub", specifier = ">=0.25.1" },

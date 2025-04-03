@@ -17,12 +17,17 @@ def check_pinecone_connection():
         return False
     
     try:
-        # Initialize Pinecone
-        print(f"Initializing Pinecone with provided API key...")
-        pinecone.init(api_key=api_key)
+        # For pinecone-client v2.2.2, there is no Pinecone class, use the globals
+        print(f"Connecting to Pinecone with provided API key...")
         
-        # List indexes to verify connection
+        # Check API key validity by attempting to list indexes
         print("Listing Pinecone indexes...")
+        
+        # Set up pinecone with environment
+        environment = "gcp-starter"  # or the appropriate one
+        pinecone.init(api_key=api_key, environment=environment)
+        
+        # List indexes
         indexes = pinecone.list_indexes()
         
         print(f"Connection successful! Found {len(indexes)} indexes:")
