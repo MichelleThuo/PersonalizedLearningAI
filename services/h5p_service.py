@@ -48,6 +48,8 @@ class H5PService:
             elif content_type == "interactive_video":
                 # This would require a video URL to enhance
                 return {"error": "Interactive video generation requires a video URL"}
+            elif content_type == "fill_in_the_blanks":
+                return self.generate_fill_in_the_blanks(content_text)
             else:
                 return {"error": f"Unsupported H5P content type: {content_type}"}
         
@@ -416,9 +418,172 @@ Example format:
             return "H5P.QuestionSet 1.17"
         elif content_type == "interactive_video":
             return "H5P.InteractiveVideo 1.22"
+        elif content_type == "fill_in_the_blanks":
+            return "H5P.Blanks 1.12"
         else:
             return "H5P.CoursePresentation 1.22"  # default
     
+    def generate_fill_in_the_blanks(self, content_text):
+        """
+        Generate an H5P fill-in-the-blanks exercise from content
+        
+        Args:
+            content_text (str): The course content text
+            
+        Returns:
+            dict: Generation result with file path or error
+        """
+        try:
+            # Generate fill-in-the-blanks sentences using AI
+            sentences = self._generate_blanks_with_ai(content_text)
+            
+            if not sentences:
+                return {"error": "Failed to generate fill-in-the-blanks content"}
+            
+            # Create H5P structure
+            h5p_json = self._create_blanks_structure(sentences)
+            
+            # Generate H5P package
+            package_result = self._create_h5p_package(h5p_json, "fill_in_the_blanks")
+            
+            return package_result
+        
+        except Exception as e:
+            logger.error(f"Error generating fill-in-the-blanks: {str(e)}")
+            return {"error": f"Failed to generate fill-in-the-blanks: {str(e)}"}
+    
+    def _generate_blanks_with_ai(self, content_text):
+        """
+        Use AI to generate fill-in-the-blanks sentences from text
+        
+        Args:
+            content_text (str): The course content text
+            
+        Returns:
+            list: List of sentence objects with blanks
+        """
+        try:
+            # Create a prompt for fill-in-the-blanks generation
+            prompt = f"""Create 5-8 fill-in-the-blanks sentences based on the following content:
+
+{content_text}
+
+For each sentence, identify key terms to blank out. Format the response as a JSON array of sentence objects.
+Each sentence should have:
+1. The full text with blanks indicated by "*blank*" (e.g. "The capital of France is *blank*.")
+2. An array of correct answers for each blank
+
+Example format:
+[
+  {{
+    "text": "The capital of France is *blank*.",
+    "answers": ["Paris"]
+  }},
+  {{
+    "text": "HTML stands for *blank* *blank* *blank*.",
+    "answers": ["Hypertext", "Markup", "Language"]
+  }}
+]
+"""
+            
+            # Create payload for AI model
+            payload = {
+                "inputs": prompt,
+                "parameters": {
+                    "max_new_tokens": 1024,
+                    "temperature": 0.7,
+                    "return_full_text": False
+                }
+            }
+            
+            # Query API
+            response = self.ai_service._query_huggingface(payload)
+            
+            if not response:
+                return []
+            
+            # Parse JSON from response
+            try:
+                if isinstance(response, list) and len(response) > 0:
+                    text_response = response[0].get("generated_text", "")
+                else:
+                    text_response = response.get("generated_text", "")
+                
+                # Find JSON in the response
+                json_start = text_response.find("[")
+                json_end = text_response.rfind("]") + 1
+                
+                if json_start >= 0 and json_end > json_start:
+                    json_str = text_response[json_start:json_end]
+                    sentences = json.loads(json_str)
+                    return sentences
+                else:
+                    logger.error("Could not find valid JSON array in response")
+                    return []
+            except json.JSONDecodeError as e:
+                logger.error(f"Error parsing JSON from response: {str(e)}")
+                return []
+        
+        except Exception as e:
+            logger.error(f"Error generating fill-in-the-blanks with AI: {str(e)}")
+            return []
+    
+    def _create_blanks_structure(self, sentences):
+        """
+        Create H5P fill-in-the-blanks JSON structure
+        
+        Args:
+            sentences (list): List of sentence objects with blanks
+            
+        Returns:
+            dict: H5P content structure
+        """
+        # Process sentences to H5P format
+        task_text = ""
+        for sentence in sentences:
+            # Replace *blank* with H5P blanks format
+            blank_count = 0
+            text = sentence["text"]
+            answers = sentence["answers"]
+            
+            for i in range(len(answers)):
+                blank_placeholder = "*blank*"
+                if blank_placeholder in text:
+                    # Replace with H5P blank format: *answer*
+                    answer = answers[blank_count]
+                    blank_count += 1
+                    text = text.replace(blank_placeholder, f"*{answer}*", 1)
+            
+            task_text += text + "\n\n"
+        
+        # Base H5P structure for fill-in-the-blanks
+        h5p_structure = {
+            "params": {
+                "taskDescription": "Fill in the blanks with the correct terms.",
+                "text": task_text.strip(),
+                "behaviour": {
+                    "enableRetry": True,
+                    "enableSolutionsButton": True,
+                    "enableCheckButton": True,
+                    "caseSensitive": False,
+                    "autoCheck": False,
+                    "showSolutionsRequiresInput": True
+                },
+                "l10n": {
+                    "checkAnswer": "Check",
+                    "showSolution": "Show solution",
+                    "tryAgain": "Retry",
+                    "solutionButton": "Solution",
+                    "correctText": "Correct!",
+                    "incorrectText": "Incorrect!",
+                    "missedText": "Missing!",
+                    "displaySolutionDescription": "Task is updated to contain the solution."
+                }
+            }
+        }
+        
+        return h5p_structure
+        
     def _get_dependencies(self, content_type):
         """Get the required H5P dependencies for the content type"""
         dependencies = []
@@ -434,5 +599,7 @@ Example format:
             dependencies.append({"machineName": "H5P.MultiChoice", "majorVersion": 1, "minorVersion": 14})
         elif content_type == "interactive_video":
             dependencies.append({"machineName": "H5P.InteractiveVideo", "majorVersion": 1, "minorVersion": 22})
+        elif content_type == "fill_in_the_blanks":
+            dependencies.append({"machineName": "H5P.Blanks", "majorVersion": 1, "minorVersion": 12})
         
         return dependencies

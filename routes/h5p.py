@@ -30,7 +30,7 @@ def generate_h5p_content():
         custom_text = data.get('custom_text')
         
         # Validate content type
-        valid_types = ['course_presentation', 'question_set', 'interactive_video']
+        valid_types = ['course_presentation', 'question_set', 'interactive_video', 'fill_in_the_blanks']
         if content_type not in valid_types:
             return jsonify({
                 'error': f'Invalid content type. Must be one of: {", ".join(valid_types)}'
