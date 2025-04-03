@@ -29,6 +29,10 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["HF_API_TOKEN"] = os.environ.get("HF_API_TOKEN")  # For Hugging Face models
 app.config["OPENAI_API_KEY"] = os.environ.get("OPENAI_API_KEY")  # Kept for compatibility
 
+# Moodle LMS integration configuration
+app.config["MOODLE_BASE_URL"] = os.environ.get("MOODLE_BASE_URL", "")
+app.config["MOODLE_API_TOKEN"] = os.environ.get("MOODLE_API_TOKEN", "")
+
 # Initialize the app with the database extension
 db.init_app(app)
 
@@ -40,9 +44,13 @@ with app.app_context():
     # Import and register route blueprints
     from routes.views import views_bp
     from routes.api import api_bp
+    from routes.moodle import moodle_bp
+    from routes.h5p import h5p_bp
     
     app.register_blueprint(views_bp)
     app.register_blueprint(api_bp, url_prefix="/api")
+    app.register_blueprint(moodle_bp, url_prefix="/api/moodle")
+    app.register_blueprint(h5p_bp, url_prefix="/api/h5p")
     
     # Create all database tables
     db.create_all()

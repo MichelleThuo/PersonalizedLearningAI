@@ -1,0 +1,254 @@
+{% extends 'base.html' %}
+
+{% block title %}H5P Content Generator{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">H5P Content Generator</h1>
+    
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Generate H5P Content</h5>
+                </div>
+                <div class="card-body">
+                    <form id="h5pGeneratorForm">
+                        <div class="mb-3">
+                            <label for="contentType" class="form-label">Content Type</label>
+                            <select class="form-select" id="contentType" name="contentType" required>
+                                <option value="" selected disabled>Select a content type</option>
+                                <option value="course_presentation">Course Presentation</option>
+                                <option value="question_set">Question Set</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3" id="courseContentSelection">
+                            <label for="contentId" class="form-label">Course Content</label>
+                            <select class="form-select" id="contentId" name="contentId">
+                                <option value="" selected disabled>Select course content</option>
+                                <!-- Will be populated dynamically -->
+                            </select>
+                            <div class="form-text">Select existing course content or enter custom text below.</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="customText" class="form-label">Custom Text</label>
+                            <textarea class="form-control" id="customText" name="customText" rows="6" placeholder="Enter custom content text here..."></textarea>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary" id="generateButton">
+                            Generate H5P Content
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Available H5P Content</h5>
+                </div>
+                <div class="card-body">
+                    <div id="h5pContentList">
+                        <p class="text-muted">Select a course to view available H5P content.</p>
+                    </div>
+                    
+                    <form id="courseSelector" class="mb-3">
+                        <label for="courseSelect" class="form-label">Select Course</label>
+                        <select class="form-select" id="courseSelect">
+                            <option value="" selected disabled>Select a course</option>
+                            <!-- Will be populated dynamically -->
+                        </select>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Generation Result</h5>
+                </div>
+                <div class="card-body">
+                    <div id="generationResult">
+                        <p class="text-muted">Generation results will appear here.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Load courses for selection
+        fetch('/api/courses')
+            .then(response => response.json())
+            .then(data => {
+                const courseSelect = document.getElementById('courseSelect');
+                data.courses.forEach(course => {
+                    const option = document.createElement('option');
+                    option.value = course.id;
+                    option.textContent = course.title;
+                    courseSelect.appendChild(option);
+                });
+            })
+            .catch(error => console.error('Error loading courses:', error));
+        
+        // Handle course selection change
+        document.getElementById('courseSelect').addEventListener('change', function() {
+            const courseId = this.value;
+            
+            // Load course content for the selected course
+            fetch(`/api/course/${courseId}/contents`)
+                .then(response => response.json())
+                .then(data => {
+                    // Populate content dropdown
+                    const contentSelect = document.getElementById('contentId');
+                    contentSelect.innerHTML = '<option value="" selected disabled>Select course content</option>';
+                    
+                    data.contents.forEach(content => {
+                        const option = document.createElement('option');
+                        option.value = content.id;
+                        option.textContent = content.title;
+                        contentSelect.appendChild(option);
+                    });
+                })
+                .catch(error => console.error('Error loading course content:', error));
+            
+            // Load H5P content for the selected course
+            fetch(`/api/h5p/for-course/${courseId}`)
+                .then(response => response.json())
+                .then(data => {
+                    const contentList = document.getElementById('h5pContentList');
+                    
+                    if (data.length === 0) {
+                        contentList.innerHTML = '<p>No H5P content available for this course.</p>';
+                        return;
+                    }
+                    
+                    // Create content list
+                    const listHtml = '<ul class="list-group">' +
+                        data.map(item => 
+                            `<li class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>${item.title}</strong>
+                                        <br>
+                                        <small class="text-muted">${item.content_type}</small>
+                                    </div>
+                                    <a href="${item.url}" class="btn btn-sm btn-outline-primary" target="_blank">
+                                        Download
+                                    </a>
+                                </div>
+                             </li>`
+                        ).join('') +
+                        '</ul>';
+                    
+                    contentList.innerHTML = listHtml;
+                })
+                .catch(error => console.error('Error loading H5P content:', error));
+        });
+        
+        // Handle H5P generation form submission
+        document.getElementById('h5pGeneratorForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const generateButton = document.getElementById('generateButton');
+            generateButton.disabled = true;
+            generateButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Generating...';
+            
+            const contentType = document.getElementById('contentType').value;
+            const contentId = document.getElementById('contentId').value;
+            const customText = document.getElementById('customText').value;
+            
+            // Validation
+            if (!contentType) {
+                alert('Please select a content type');
+                generateButton.disabled = false;
+                generateButton.textContent = 'Generate H5P Content';
+                return;
+            }
+            
+            if (!contentId && !customText) {
+                alert('Please either select course content or enter custom text');
+                generateButton.disabled = false;
+                generateButton.textContent = 'Generate H5P Content';
+                return;
+            }
+            
+            // Prepare data
+            const data = {
+                content_type: contentType
+            };
+            
+            if (contentId) {
+                data.content_id = contentId;
+            } else {
+                data.custom_text = customText;
+            }
+            
+            // Send request to generate H5P content
+            fetch('/api/h5p/generate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                // Update UI with result
+                const resultDiv = document.getElementById('generationResult');
+                
+                if (result.error) {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-danger">
+                            <strong>Error:</strong> ${result.error}
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-success">
+                            <strong>Success!</strong> ${result.message}
+                        </div>
+                        <div class="text-center mt-3">
+                            <a href="${result.h5p_url}" class="btn btn-primary" target="_blank">
+                                Download H5P Content
+                            </a>
+                        </div>
+                    `;
+                    
+                    // If a course is selected, refresh the H5P content list
+                    const courseSelect = document.getElementById('courseSelect');
+                    if (courseSelect.value) {
+                        const changeEvent = new Event('change');
+                        courseSelect.dispatchEvent(changeEvent);
+                    }
+                }
+                
+                // Reset button
+                generateButton.disabled = false;
+                generateButton.textContent = 'Generate H5P Content';
+            })
+            .catch(error => {
+                console.error('Error generating H5P content:', error);
+                
+                // Update UI with error
+                const resultDiv = document.getElementById('generationResult');
+                resultDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <strong>Error:</strong> Failed to generate H5P content. Please try again.
+                    </div>
+                `;
+                
+                // Reset button
+                generateButton.disabled = false;
+                generateButton.textContent = 'Generate H5P Content';
+            });
+        });
+    });
+</script>
+{% endblock %}

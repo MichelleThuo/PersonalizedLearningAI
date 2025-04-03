@@ -5,6 +5,7 @@ from models import ChatSession, ChatMessage, Course, CourseContent
 from services.openai_service import OpenAIService
 from services.search_service import SearchService
 from services.quiz_service import QuizService
+from services.recommendation_service import RecommendationService
 from app import db
 
 logger = logging.getLogger(__name__)
@@ -13,6 +14,7 @@ api_bp = Blueprint('api', __name__)
 openai_service = OpenAIService()
 search_service = SearchService()
 quiz_service = QuizService()
+recommendation_service = RecommendationService()
 
 @api_bp.route('/chat', methods=['POST'])
 def chat():
@@ -261,3 +263,47 @@ def get_course_contents(course_id):
     except Exception as e:
         logger.error(f"Error in get_course_contents endpoint: {str(e)}")
         return jsonify({'error': 'An error occurred retrieving course contents'}), 500
+
+@api_bp.route('/recommendations/<int:user_id>', methods=['GET'])
+def get_recommendations(user_id):
+    """API endpoint for getting personalized course recommendations"""
+    try:
+        limit = request.args.get('limit', 5, type=int)
+        
+        # Get recommendations for the user
+        recommendations = recommendation_service.get_recommendations_for_user(user_id, limit)
+        
+        return jsonify({
+            'user_id': user_id,
+            'recommendations': recommendations
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in get_recommendations endpoint: {str(e)}")
+        return jsonify({'error': 'An error occurred retrieving recommendations'}), 500
+
+@api_bp.route('/learning-path', methods=['POST'])
+def generate_learning_path():
+    """API endpoint for generating a progressive learning path"""
+    try:
+        data = request.json
+        user_id = data.get('user_id')
+        topic = data.get('topic')
+        difficulty = data.get('difficulty', 'beginner')
+        
+        if not user_id or not topic:
+            return jsonify({'error': 'User ID and topic are required'}), 400
+        
+        # Generate learning path
+        learning_path = recommendation_service.generate_learning_path(user_id, topic, difficulty)
+        
+        if 'error' in learning_path:
+            return jsonify({'error': learning_path['error']}), 500
+        
+        return jsonify({
+            'learning_path': learning_path
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in generate_learning_path endpoint: {str(e)}")
+        return jsonify({'error': 'An error occurred generating the learning path'}), 500

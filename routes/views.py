@@ -71,3 +71,17 @@ def quiz_detail(quiz_id):
                           quiz=quiz,
                           course=quiz.course,
                           quiz_view=True)
+
+@views_bp.route('/h5p')
+def h5p_generator():
+    """H5P content generation page"""
+    course_id = request.args.get('course_id')
+    
+    courses = Course.query.all()
+    course = None
+    if course_id:
+        course = Course.query.get(course_id)
+    
+    return render_template('h5p.html',
+                          course=course,
+                          courses=courses)
