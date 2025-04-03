@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+
+{% block title %}AI Learning Assistant - Quiz{% endblock %}
+
+{% block content %}
+{% if quiz_view %}
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2>{{ quiz.title }}</h2>
+            <p class="lead">{{ quiz.description }}</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="/quiz" class="btn btn-outline-primary">
+                <i class="fas fa-arrow-left me-1"></i> Back to Quizzes
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div id="quiz-container">
+                        <div class="loading-container">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p>Loading quiz...</p>
+                        </div>
+                    </div>
+                    <div id="quiz-results"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% else %}
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2>Quiz Generator</h2>
+            <p class="lead">
+                Create custom quizzes to test your knowledge on specific topics.
+            </p>
+        </div>
+        <div class="col-md-4">
+            <div class="form-group">
+                <label for="quiz-course-select" class="form-label">Select a Course</label>
+                <select class="form-select" id="quiz-course-select">
+                    <option value="">Select a course</option>
+                    {% for c in courses %}
+                    <option value="{{ c.id }}" {% if course and course.id == c.id %}selected{% endif %}>{{ c.title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-5">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Generate a New Quiz</h5>
+                </div>
+                <div class="card-body">
+                    <form id="generate-quiz-form">
+                        <div class="mb-3">
+                            <label for="quiz-title" class="form-label">Quiz Title</label>
+                            <input type="text" class="form-control" id="quiz-title" 
+                                   placeholder="Enter quiz title" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="quiz-description" class="form-label">Description (Optional)</label>
+                            <textarea class="form-control" id="quiz-description" rows="3" 
+                                      placeholder="Enter a brief description"></textarea>
+                        </div>
+                        <div class="mb-3" id="content-select-container">
+                            <!-- Content select will be populated based on course selection -->
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-magic me-1"></i> Generate Quiz
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+            {% if quizzes %}
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Existing Quizzes</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        {% for quiz in quizzes %}
+                        <a href="/quiz/{{ quiz.id }}" class="list-group-item list-group-item-action">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">{{ quiz.title }}</h6>
+                                <small>{{ quiz.created_at.strftime('%Y-%m-%d') }}</small>
+                            </div>
+                            <p class="mb-1 small text-truncate">{{ quiz.description or 'No description' }}</p>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="col-md-7">
+            <div class="card">
+                <div class="card-body">
+                    <div id="quiz-container">
+                        <div class="text-center p-5">
+                            <i class="fas fa-question-circle fa-4x text-secondary mb-3"></i>
+                            <p class="lead">Fill out the form to generate a custom quiz</p>
+                            <p>Our AI will create questions based on the selected course content</p>
+                        </div>
+                    </div>
+                    <div id="quiz-results"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/quiz.js') }}"></script>
+{% endblock %}
