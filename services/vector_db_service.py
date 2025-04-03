@@ -1,47 +1,52 @@
 """
 Vector Database Service
-Provides functionality to store and query vector embeddings using Pinecone
+Provides functionality to index and search content using Pinecone vector database
 """
 import os
 import logging
 import json
+from typing import List, Dict, Any, Optional
+
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 import pinecone
-
-from app import db
+from flask import current_app
 from models import CourseContent, SearchIndex
+from app import db
+
+logger = logging.getLogger(__name__)
 
 class VectorDBService:
     """Service for vector database operations"""
     
     def __init__(self):
-        """Initialize the vector database service with Pinecone"""
-        self.api_key = os.environ.get("PINECONE_API_KEY")
-        self.pinecone_environment = "us-west1-gcp"  # Update with your environment
-        self.index_name = "moodle-content"
-        self.dimension = 768  # Dimension for the vector embeddings
-        self.vectorizer = TfidfVectorizer(max_features=self.dimension)
+        """Initialize the vector database service"""
         self.initialized = False
+        self.index_name = "learning-assistant"
+        self.dimension = 512  # Default vector dimension
+        self.api_key = os.environ.get("PINECONE_API_KEY")
+        self.vectorizer = TfidfVectorizer(max_features=self.dimension)
         
-        logging.info("Initializing VectorDBService")
-        
-    def initialize(self):
-        """Initialize Pinecone connection and index"""
+        # Initialize lazily (only when needed)
+        # self._initialize()
+    
+    def _initialize(self):
+        """Initialize the Pinecone client and index"""
         if self.initialized:
             return True
-            
+        
         try:
             if not self.api_key:
-                logging.error("Pinecone API key not found in environment variables")
+                logger.error("PINECONE_API_KEY environment variable is not set")
                 return False
-                
-            # Initialize Pinecone
-            pinecone.init(api_key=self.api_key, environment=self.pinecone_environment)
             
-            # Check if index exists, create if not
+            # Initialize Pinecone
+            logger.info("Initializing Pinecone...")
+            pinecone.init(api_key=self.api_key, environment="gcp-starter")
+            
+            # Check if our index exists, if not create it
             if self.index_name not in pinecone.list_indexes():
-                logging.info(f"Creating Pinecone index: {self.index_name}")
+                logger.info(f"Creating Pinecone index '{self.index_name}'...")
                 pinecone.create_index(
                     name=self.index_name,
                     dimension=self.dimension,
@@ -50,98 +55,110 @@ class VectorDBService:
             
             # Connect to the index
             self.index = pinecone.Index(self.index_name)
+            logger.info(f"Connected to Pinecone index '{self.index_name}'")
+            
             self.initialized = True
-            logging.info("Pinecone initialization successful")
             return True
             
         except Exception as e:
-            logging.error(f"Error initializing Pinecone: {str(e)}")
+            logger.error(f"Error initializing Pinecone: {str(e)}")
             return False
     
-    def generate_embedding(self, text):
+    def _text_to_vector(self, text: str) -> List[float]:
         """
-        Generate a vector embedding for text
+        Convert text to a vector representation using TF-IDF
         
         Args:
-            text (str): Text to embed
+            text (str): The text to vectorize
             
         Returns:
-            numpy.array: Vector embedding
+            List[float]: Vector representation of the text
         """
-        try:
-            if not text:
-                return None
-                
-            # Fit and transform on the text to get tfidf vectors
-            X = self.vectorizer.fit_transform([text])
+        if not text:
+            return [0.0] * self.dimension
+        
+        # Fit the vectorizer if not already fitted
+        if not hasattr(self.vectorizer, 'vocabulary_'):
+            # Fit on a corpus of one document (the current text)
+            self.vectorizer.fit([text])
+        
+        # Transform the text to a vector
+        vector = self.vectorizer.transform([text]).toarray()[0]
+        
+        # Normalize to unit length
+        norm = np.linalg.norm(vector)
+        if norm > 0:
+            vector = vector / norm
+        
+        # Return as a list with specified dimension
+        result = vector.tolist()
+        if len(result) < self.dimension:
+            result.extend([0.0] * (self.dimension - len(result)))
+        elif len(result) > self.dimension:
+            result = result[:self.dimension]
             
-            # Convert to dense array and normalize
-            vector = X.toarray()[0]
-            norm = np.linalg.norm(vector)
-            if norm > 0:
-                vector = vector / norm
-                
-            return vector.tolist()
-            
-        except Exception as e:
-            logging.error(f"Error generating embedding: {str(e)}")
-            return None
+        return result
     
-    def index_content(self, content_id):
+    def index_content(self, content_id: int) -> bool:
         """
-        Index course content in Pinecone
+        Index a piece of course content in the vector database
         
         Args:
-            content_id (int): ID of the CourseContent to index
+            content_id (int): The ID of the CourseContent to index
             
         Returns:
             bool: True if successful, False otherwise
         """
         try:
-            # Initialize if not done already
-            if not self.initialize():
-                return False
-                
-            # Get the content from database
+            # Get the content from the database
             content = CourseContent.query.get(content_id)
             if not content:
-                logging.error(f"Content not found with ID: {content_id}")
+                logger.error(f"Content with ID {content_id} not found")
                 return False
             
-            # Get text to index
-            text_to_index = content.content_text
-            if not text_to_index:
-                logging.error(f"No text content for ID: {content_id}")
+            if not content.content_text:
+                logger.warning(f"Content with ID {content_id} has no text to index")
                 return False
             
-            # Generate embedding
-            embedding = self.generate_embedding(text_to_index)
-            if not embedding:
-                logging.error(f"Failed to generate embedding for content ID: {content_id}")
+            # Initialize the vector database if not already initialized
+            if not self._initialize():
                 return False
             
-            # Create metadata
+            # Convert the content text to a vector
+            vector = self._text_to_vector(content.content_text)
+            
+            # Add metadata
             metadata = {
-                "content_id": content_id,
-                "course_id": content.course_id,
-                "title": content.title,
-                "content_type": content.content_type,
-                "url": content.url if content.url else ""
+                'content_id': content.id,
+                'content_type': content.content_type,
+                'title': content.title,
+                'course_id': content.course_id
             }
             
-            # Upsert to Pinecone
+            # Upsert the vector into Pinecone
             self.index.upsert(
-                vectors=[(str(content_id), embedding, metadata)]
+                vectors=[(str(content.id), vector, metadata)]
             )
             
-            logging.info(f"Content indexed in Pinecone for ID: {content_id}")
+            # Add/update the search index record in our database
+            search_index = SearchIndex.query.filter_by(content_id=content.id).first()
+            if not search_index:
+                search_index = SearchIndex(content_id=content.id, indexed_text=content.content_text)
+                db.session.add(search_index)
+            else:
+                search_index.indexed_text = content.content_text
+            
+            db.session.commit()
+            
+            logger.info(f"Successfully indexed content ID {content_id}")
             return True
             
         except Exception as e:
-            logging.error(f"Error indexing content in Pinecone: {str(e)}")
+            logger.error(f"Error indexing content: {str(e)}")
+            db.session.rollback()
             return False
     
-    def search(self, query, course_id=None, limit=10):
+    def search(self, query: str, course_id: Optional[int] = None, limit: int = 10) -> List[Dict[str, Any]]:
         """
         Search for content matching the given query
         
@@ -151,114 +168,154 @@ class VectorDBService:
             limit (int): Maximum number of results to return
             
         Returns:
-            list: List of content IDs matching the query
+            List[Dict[str, Any]]: List of search results
         """
         try:
-            # Initialize if not done already
-            if not self.initialize():
-                return []
-                
-            # Generate embedding for the query
-            query_embedding = self.generate_embedding(query)
-            if not query_embedding:
-                logging.error("Failed to generate embedding for query")
+            if not query:
                 return []
             
-            # Filter by course if specified
-            filter_query = {}
+            # Initialize the vector database if not already initialized
+            if not self._initialize():
+                return []
+            
+            # Convert the query to a vector
+            query_vector = self._text_to_vector(query)
+            
+            # Set up filter for course_id if provided
+            filter_dict = None
             if course_id:
-                filter_query = {"course_id": int(course_id)}
+                filter_dict = {
+                    "course_id": {"$eq": course_id}
+                }
             
             # Query Pinecone
             results = self.index.query(
-                vector=query_embedding,
+                vector=query_vector,
                 top_k=limit,
                 include_metadata=True,
-                filter=filter_query
+                filter=filter_dict
             )
             
-            # Process results
-            content_ids = []
-            for match in results.matches:
-                content_ids.append(int(match.id))
+            # Format results
+            formatted_results = []
+            for match in results.get("matches", []):
+                content_id = match.get("metadata", {}).get("content_id")
+                if content_id:
+                    content = CourseContent.query.get(content_id)
+                    if content:
+                        formatted_results.append({
+                            'id': content.id,
+                            'title': content.title,
+                            'content_type': content.content_type,
+                            'course_id': content.course_id,
+                            'course': content.course.title if content.course else None,
+                            'url': content.url,
+                            'snippet': (content.content_text[:200] + '...') if content.content_text and len(content.content_text) > 200 else content.content_text,
+                            'score': match.get("score", 0)
+                        })
             
-            logging.info(f"Pinecone search for '{query}' returned {len(content_ids)} results")
-            return content_ids
+            return formatted_results
             
         except Exception as e:
-            logging.error(f"Error searching in Pinecone: {str(e)}")
+            logger.error(f"Error searching vector database: {str(e)}")
             return []
     
-    def batch_index_content(self, course_id=None):
+    def batch_index(self, course_id: Optional[int] = None) -> Dict[str, Any]:
         """
-        Batch index all course content or content from a specific course
+        Batch index all content or content for a specific course
         
         Args:
             course_id (int, optional): Index only content from this course
             
         Returns:
-            dict: Summary of indexing results
+            Dict[str, Any]: Results with success/failure counts
         """
         try:
-            # Initialize if not done already
-            if not self.initialize():
-                return {"status": "error", "message": "Failed to initialize Pinecone"}
-                
-            # Query content to index
+            # Initialize the vector database if not already initialized
+            if not self._initialize():
+                return {"status": "error", "message": "Failed to initialize vector database"}
+            
+            # Get content to index
             query = CourseContent.query
             if course_id:
                 query = query.filter_by(course_id=course_id)
             
-            contents = query.all()
+            # Only index content with text
+            query = query.filter(CourseContent.content_text.isnot(None))
+            content_items = query.all()
             
-            # Track results
-            results = {
-                "total": len(contents),
-                "indexed": 0,
-                "failed": 0,
-                "errors": []
-            }
+            if not content_items:
+                return {"status": "warning", "message": "No content found to index"}
             
-            # Index each content
-            for content in contents:
-                success = self.index_content(content.id)
-                if success:
-                    results["indexed"] += 1
+            # Index each content item
+            success_count = 0
+            failure_count = 0
+            
+            for content in content_items:
+                if self.index_content(content.id):
+                    success_count += 1
                 else:
-                    results["failed"] += 1
-                    results["errors"].append(f"Failed to index content ID: {content.id}")
+                    failure_count += 1
             
-            logging.info(f"Batch indexing complete: {results['indexed']}/{results['total']} successful")
-            return {
-                "status": "success" if results["failed"] == 0 else "partial",
-                "results": results
-            }
+            total = success_count + failure_count
+            
+            if success_count == total:
+                return {
+                    "status": "success",
+                    "message": f"Successfully indexed all {total} content items"
+                }
+            elif success_count > 0:
+                return {
+                    "status": "partial",
+                    "message": f"Indexed {success_count} out of {total} content items",
+                    "success_count": success_count,
+                    "failure_count": failure_count
+                }
+            else:
+                return {
+                    "status": "error",
+                    "message": "Failed to index any content"
+                }
             
         except Exception as e:
-            logging.error(f"Error in batch indexing: {str(e)}")
-            return {"status": "error", "message": str(e)}
+            logger.error(f"Error in batch index: {str(e)}")
+            return {"status": "error", "message": f"An error occurred: {str(e)}"}
     
-    def delete_content(self, content_id):
+    def get_status(self) -> Dict[str, Any]:
         """
-        Delete content from the index
+        Get status of the vector database
         
-        Args:
-            content_id (int): ID of the content to delete
-            
         Returns:
-            bool: True if successful, False otherwise
+            Dict[str, Any]: Status information
         """
         try:
-            # Initialize if not done already
-            if not self.initialize():
-                return False
-                
-            # Delete from Pinecone
-            self.index.delete(ids=[str(content_id)])
+            if not self.api_key:
+                return {
+                    "status": "not_configured",
+                    "message": "Pinecone API key not set"
+                }
             
-            logging.info(f"Content deleted from Pinecone for ID: {content_id}")
-            return True
+            # Try to initialize
+            if not self._initialize():
+                return {
+                    "status": "error",
+                    "message": "Failed to initialize Pinecone"
+                }
+            
+            # Get index statistics
+            stats = self.index.describe_index_stats()
+            
+            return {
+                "status": "active",
+                "index_name": self.index_name,
+                "dimension": self.dimension,
+                "vector_count": stats.get("total_vector_count", 0),
+                "namespaces": stats.get("namespaces", {})
+            }
             
         except Exception as e:
-            logging.error(f"Error deleting content from Pinecone: {str(e)}")
-            return False
+            logger.error(f"Error getting vector database status: {str(e)}")
+            return {
+                "status": "error",
+                "message": f"An error occurred: {str(e)}"
+            }

@@ -3,32 +3,38 @@ Video Transcription Service
 Provides functionality to transcribe video content using Whisper
 """
 import os
-import tempfile
 import logging
+import tempfile
 from pathlib import Path
+
 import whisper
 import ffmpeg
 from pydub import AudioSegment
-
+from flask import current_app
+from models import CourseContent
 from app import db
-from models import CourseContent, SearchIndex
+
+logger = logging.getLogger(__name__)
 
 class TranscriptionService:
     """Service for transcribing video content"""
     
     def __init__(self):
-        """Initialize the transcription service with Whisper model"""
+        """Initialize the transcription service"""
         self.model = None
-        # Default to a smaller model for faster processing
-        self.model_size = "base"
-        logging.info(f"Initializing TranscriptionService with model size: {self.model_size}")
+        self.model_name = "base"  # Can be tiny, base, small, medium, large
     
     def _load_model(self):
         """Lazy-load the Whisper model when needed"""
         if self.model is None:
-            logging.info(f"Loading Whisper model: {self.model_size}")
-            self.model = whisper.load_model(self.model_size)
-        return self.model
+            try:
+                logger.info(f"Loading Whisper model '{self.model_name}'...")
+                self.model = whisper.load_model(self.model_name)
+                logger.info("Whisper model loaded successfully")
+            except Exception as e:
+                logger.error(f"Error loading Whisper model: {str(e)}")
+                return False
+        return True
     
     def transcribe_video(self, video_path):
         """
@@ -41,32 +47,29 @@ class TranscriptionService:
             str: Transcribed text or error message
         """
         try:
-            logging.info(f"Starting transcription for video: {video_path}")
-            
-            # Check if file exists
-            if not os.path.exists(video_path):
-                logging.error(f"Video file not found: {video_path}")
-                return "Error: Video file not found"
+            # Load model if not already loaded
+            if not self._load_model():
+                return None
             
             # Extract audio from video
             audio_path = self._extract_audio(video_path)
-            if audio_path.startswith("Error:"):
-                return audio_path
+            if not audio_path:
+                logger.error("Failed to extract audio from video")
+                return None
             
-            # Transcribe audio
-            model = self._load_model()
-            result = model.transcribe(audio_path)
+            # Transcribe the audio
+            logger.info(f"Transcribing audio: {audio_path}")
+            result = self.model.transcribe(audio_path)
             
             # Clean up temporary audio file
             if os.path.exists(audio_path):
                 os.remove(audio_path)
-                
-            logging.info(f"Transcription completed for video: {video_path}")
-            return result["text"]
+            
+            return result.get("text", "")
             
         except Exception as e:
-            logging.error(f"Error transcribing video: {str(e)}")
-            return f"Error: {str(e)}"
+            logger.error(f"Error transcribing video: {str(e)}")
+            return None
     
     def _extract_audio(self, video_path):
         """
@@ -76,26 +79,44 @@ class TranscriptionService:
             video_path (str): Path to the video file
             
         Returns:
-            str: Path to extracted audio file or error message
+            str: Path to extracted audio file or None if failed
         """
         try:
-            logging.info(f"Extracting audio from video: {video_path}")
+            # Create temporary file for the extracted audio
+            temp_dir = tempfile.gettempdir()
+            audio_path = os.path.join(temp_dir, f"audio_{os.path.basename(video_path)}.mp3")
             
-            # Create temporary file for the audio
-            temp_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
-            temp_file.close()
-            temp_audio_path = temp_file.name
+            # Extract audio using ffmpeg
+            logger.info(f"Extracting audio from {video_path} to {audio_path}")
             
-            # Use FFmpeg to extract audio
-            video = AudioSegment.from_file(video_path)
-            video.export(temp_audio_path, format="wav")
+            try:
+                # First try with ffmpeg-python library
+                (
+                    ffmpeg
+                    .input(video_path)
+                    .output(audio_path, acodec='mp3', ab='128k', ac=1, ar='16k')
+                    .run(quiet=True, overwrite_output=True)
+                )
+            except Exception as e:
+                logger.warning(f"ffmpeg-python failed: {str(e)}, trying with pydub")
+                
+                # Fallback to pydub
+                try:
+                    video = AudioSegment.from_file(video_path)
+                    video.export(audio_path, format="mp3")
+                except Exception as e2:
+                    logger.error(f"pydub also failed: {str(e2)}")
+                    return None
             
-            logging.info(f"Audio extracted to: {temp_audio_path}")
-            return temp_audio_path
-            
+            if os.path.exists(audio_path):
+                return audio_path
+            else:
+                logger.error("Audio extraction completed but file doesn't exist")
+                return None
+                
         except Exception as e:
-            logging.error(f"Error extracting audio: {str(e)}")
-            return f"Error: {str(e)}"
+            logger.error(f"Error extracting audio: {str(e)}")
+            return None
     
     def process_video_content(self, content_id):
         """
@@ -108,54 +129,38 @@ class TranscriptionService:
             bool: True if successful, False otherwise
         """
         try:
-            logging.info(f"Processing video content with ID: {content_id}")
-            
-            # Get the content from database
+            # Get the content from the database
             content = CourseContent.query.get(content_id)
             if not content:
-                logging.error(f"Content not found with ID: {content_id}")
+                logger.error(f"Content with ID {content_id} not found")
                 return False
             
-            # Skip if not a video
             if content.content_type != 'video':
-                logging.info(f"Content is not a video. Type: {content.content_type}")
+                logger.error(f"Content with ID {content_id} is not a video")
                 return False
             
-            # Get video path from URL
-            video_path = content.url
-            if not video_path or not video_path.strip():
-                logging.error(f"No video URL specified for content ID: {content_id}")
+            # Get the full path to the video file
+            video_path = os.path.join(current_app.root_path, content.url)
+            logger.info(f"Processing video: {video_path}")
+            
+            if not os.path.exists(video_path):
+                logger.error(f"Video file not found: {video_path}")
                 return False
             
-            # Check if it's a local path or URL
-            is_local_path = os.path.exists(video_path)
-            
-            if is_local_path:
-                # Transcribe the video
-                transcription = self.transcribe_video(video_path)
-                if transcription.startswith("Error:"):
-                    logging.error(transcription)
-                    return False
-                
-                # Update content with transcription
-                content.content_text = transcription
-                
-                # Update search index
-                search_index = SearchIndex.query.filter_by(content_id=content_id).first()
-                if search_index:
-                    search_index.indexed_text = transcription
-                else:
-                    search_index = SearchIndex(content_id=content_id, indexed_text=transcription)
-                    db.session.add(search_index)
-                
-                db.session.commit()
-                logging.info(f"Transcription updated for content ID: {content_id}")
-                return True
-            else:
-                logging.error(f"Video path is not a local file: {video_path}")
+            # Transcribe the video
+            transcription = self.transcribe_video(video_path)
+            if not transcription:
+                logger.error("Transcription failed")
                 return False
-                
+            
+            # Save the transcription to the database
+            content.content_text = transcription
+            db.session.commit()
+            
+            logger.info(f"Successfully transcribed video ID {content_id}")
+            return True
+            
         except Exception as e:
-            logging.error(f"Error processing video content: {str(e)}")
+            logger.error(f"Error processing video content: {str(e)}")
             db.session.rollback()
             return False

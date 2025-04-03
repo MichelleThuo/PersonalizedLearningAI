@@ -46,11 +46,15 @@ with app.app_context():
     from routes.api import api_bp
     from routes.moodle import moodle_bp
     from routes.h5p import h5p_bp
+    from routes.transcription import transcription_bp
+    from routes.vector_db import vector_db_bp
     
     app.register_blueprint(views_bp)
     app.register_blueprint(api_bp, url_prefix="/api")
     app.register_blueprint(moodle_bp, url_prefix="/api/moodle")
     app.register_blueprint(h5p_bp, url_prefix="/api/h5p")
+    app.register_blueprint(transcription_bp)
+    app.register_blueprint(vector_db_bp)
     
     # Create all database tables
     db.create_all()
