@@ -1,0 +1,441 @@
+{% extends "base.html" %}
+
+{% block title %}Learner Interface - Moodle AI Learning Assistant{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* Custom styles for user interface */
+    .chat-container {
+        height: 500px;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+    
+    .chat-messages {
+        height: 390px;
+        overflow-y: auto;
+        padding: 15px;
+        background-color: var(--bs-dark-bg-subtle);
+    }
+    
+    .message {
+        margin-bottom: 15px;
+        max-width: 80%;
+    }
+    
+    .message-user {
+        margin-left: auto;
+        background-color: var(--bs-primary);
+        color: white;
+        border-radius: 15px 15px 0 15px;
+        padding: 10px 15px;
+    }
+    
+    .message-assistant {
+        background-color: var(--bs-secondary-bg);
+        border-radius: 15px 15px 15px 0;
+        padding: 10px 15px;
+    }
+    
+    .chat-input {
+        padding: 15px;
+        background-color: var(--bs-dark);
+        border-top: 1px solid var(--bs-border-color);
+    }
+    
+    .quick-actions {
+        margin-bottom: 20px;
+    }
+    
+    .quick-action-btn {
+        margin-right: 10px;
+        margin-bottom: 10px;
+    }
+    
+    .course-card {
+        transition: transform 0.3s;
+        margin-bottom: 20px;
+    }
+    
+    .course-card:hover {
+        transform: translateY(-5px);
+    }
+    
+    .learning-path-step {
+        padding: 15px;
+        border-left: 4px solid var(--bs-primary);
+        margin-bottom: 15px;
+        background-color: var(--bs-dark-bg-subtle);
+    }
+    
+    .learning-path-step h5 {
+        color: var(--bs-primary);
+    }
+    
+    .stat-card {
+        border-radius: 10px;
+        padding: 20px;
+        height: 100%;
+    }
+    
+    .quiz-card {
+        border-radius: 10px;
+        overflow: hidden;
+        margin-bottom: 20px;
+    }
+    
+    .profile-sidebar {
+        position: sticky;
+        top: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- User Profile Sidebar -->
+    <div class="col-md-3">
+        <div class="card profile-sidebar">
+            <div class="card-body text-center">
+                <div class="avatar mb-3">
+                    <i class="fas fa-user-circle fa-5x text-primary"></i>
+                </div>
+                <h5 class="card-title">Welcome, Learner</h5>
+                <p class="text-muted">Training Staff</p>
+                
+                <div class="progress mb-3" style="height: 10px;">
+                    <div class="progress-bar" role="progressbar" style="width: 65%;" aria-valuenow="65" aria-valuemin="0" aria-valuemax="100">65%</div>
+                </div>
+                <p class="text-muted small">Overall Learning Progress</p>
+                
+                <hr>
+                
+                <h6 class="text-start mb-3">Active Courses</h6>
+                <ul class="list-group list-group-flush text-start">
+                    <li class="list-group-item bg-transparent">
+                        <i class="fas fa-book-open me-2 text-primary"></i> 
+                        Product Training 101
+                        <span class="badge bg-success float-end">75%</span>
+                    </li>
+                    <li class="list-group-item bg-transparent">
+                        <i class="fas fa-laptop-code me-2 text-primary"></i> 
+                        Customer Support
+                        <span class="badge bg-warning float-end">45%</span>
+                    </li>
+                    <li class="list-group-item bg-transparent">
+                        <i class="fas fa-chart-line me-2 text-primary"></i> 
+                        Sales Techniques
+                        <span class="badge bg-info float-end">20%</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main Content Area -->
+    <div class="col-md-9">
+        <div class="row mb-4">
+            <div class="col-12">
+                <h2 class="mb-4">Learner Dashboard</h2>
+                
+                <!-- Quick Action Buttons -->
+                <div class="quick-actions">
+                    <button class="btn btn-primary quick-action-btn">
+                        <i class="fas fa-comment-dots me-2"></i> Ask a Question
+                    </button>
+                    <button class="btn btn-success quick-action-btn">
+                        <i class="fas fa-search me-2"></i> Search Content
+                    </button>
+                    <button class="btn btn-info quick-action-btn">
+                        <i class="fas fa-tasks me-2"></i> Take a Quiz
+                    </button>
+                    <button class="btn btn-warning quick-action-btn">
+                        <i class="fas fa-video me-2"></i> Watch Videos
+                    </button>
+                    <button class="btn btn-danger quick-action-btn">
+                        <i class="fas fa-graduation-cap me-2"></i> My Learning Path
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mb-4">
+            <!-- Chat Widget -->
+            <div class="col-md-6">
+                <div class="chat-container">
+                    <div class="chat-header p-3 bg-primary text-white">
+                        <h5 class="m-0"><i class="fas fa-robot me-2"></i> AI Learning Assistant</h5>
+                    </div>
+                    <div class="chat-messages" id="chatMessages">
+                        <div class="message message-assistant">
+                            <p class="mb-0">Hello! I'm your AI learning assistant. How can I help you with your training today?</p>
+                        </div>
+                        <div class="message message-user">
+                            <p class="mb-0">Can you tell me about product features?</p>
+                        </div>
+                        <div class="message message-assistant">
+                            <p class="mb-0">Of course! Our products include several key features:</p>
+                            <ul>
+                                <li>Advanced analytics dashboard</li>
+                                <li>Customer management system</li>
+                                <li>Integrated payment processing</li>
+                                <li>Mobile app integration</li>
+                            </ul>
+                            <p class="mb-0">Would you like to learn more about any specific feature?</p>
+                        </div>
+                    </div>
+                    <div class="chat-input">
+                        <div class="input-group">
+                            <input type="text" class="form-control" placeholder="Type your question here..." aria-label="Chat message">
+                            <button class="btn btn-primary" type="button">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Recommended Courses -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-star me-2"></i> Recommended for You</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            <a href="#" class="list-group-item list-group-item-action p-3">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1">Advanced Product Features</h6>
+                                    <span class="badge bg-primary">New</span>
+                                </div>
+                                <p class="mb-1 text-muted small">Learn about our latest product updates and advanced capabilities.</p>
+                                <small class="text-info"><i class="fas fa-info-circle me-1"></i> Based on your interests</small>
+                            </a>
+                            <a href="#" class="list-group-item list-group-item-action p-3">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1">Troubleshooting Common Issues</h6>
+                                    <span class="badge bg-success">Popular</span>
+                                </div>
+                                <p class="mb-1 text-muted small">Practical solutions for the most frequent customer questions.</p>
+                                <small class="text-info"><i class="fas fa-info-circle me-1"></i> To improve your support skills</small>
+                            </a>
+                            <a href="#" class="list-group-item list-group-item-action p-3">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1">Upselling Techniques</h6>
+                                    <small class="text-muted">30 mins</small>
+                                </div>
+                                <p class="mb-1 text-muted small">Strategies to increase sales by suggesting relevant add-ons.</p>
+                                <small class="text-info"><i class="fas fa-info-circle me-1"></i> Based on your sales activity</small>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-footer text-center">
+                        <a href="#" class="btn btn-sm btn-outline-primary">View All Recommendations</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Learning Path Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="fas fa-road me-2"></i> Your Learning Path</h5>
+                        <span class="badge bg-primary">Product Specialist</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="learning-path-step">
+                            <div class="d-flex justify-content-between">
+                                <h5>1. Product Fundamentals</h5>
+                                <span class="badge bg-success">Completed</span>
+                            </div>
+                            <p class="mb-2">Core understanding of product features and benefits.</p>
+                            <div class="d-flex justify-content-between text-muted small">
+                                <span><i class="fas fa-clock me-1"></i> 2 hours</span>
+                                <span><i class="fas fa-calendar-check me-1"></i> Completed on March 15</span>
+                            </div>
+                        </div>
+                        
+                        <div class="learning-path-step">
+                            <div class="d-flex justify-content-between">
+                                <h5>2. Customer Needs Analysis</h5>
+                                <span class="badge bg-warning">In Progress</span>
+                            </div>
+                            <p class="mb-2">Techniques for identifying and addressing customer requirements.</p>
+                            <div class="progress mb-2" style="height: 5px;">
+                                <div class="progress-bar bg-warning" role="progressbar" style="width: 65%;" aria-valuenow="65" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                            <div class="d-flex justify-content-between text-muted small">
+                                <span><i class="fas fa-clock me-1"></i> 3 hours</span>
+                                <span><i class="fas fa-check-circle me-1"></i> 65% Complete</span>
+                            </div>
+                        </div>
+                        
+                        <div class="learning-path-step">
+                            <div class="d-flex justify-content-between">
+                                <h5>3. Advanced Configuration</h5>
+                                <span class="badge bg-secondary">Locked</span>
+                            </div>
+                            <p class="mb-2">Setting up complex product configurations for enterprise customers.</p>
+                            <div class="d-flex justify-content-between text-muted small">
+                                <span><i class="fas fa-clock me-1"></i> 4 hours</span>
+                                <span><i class="fas fa-lock me-1"></i> Complete previous step to unlock</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer text-center">
+                        <a href="#" class="btn btn-outline-primary">Continue Learning</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Activities and Quizzes -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-history me-2"></i> Recent Activity</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <i class="fas fa-file-alt text-primary me-2"></i>
+                                    <span>Completed "Customer Support Basics" quiz</span>
+                                </div>
+                                <span class="text-muted small">Today</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <i class="fas fa-video text-danger me-2"></i>
+                                    <span>Watched "Troubleshooting Guide" video</span>
+                                </div>
+                                <span class="text-muted small">Yesterday</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <i class="fas fa-comment text-success me-2"></i>
+                                    <span>Asked 5 questions to AI assistant</span>
+                                </div>
+                                <span class="text-muted small">3 days ago</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <i class="fas fa-graduation-cap text-info me-2"></i>
+                                    <span>Started "Sales Techniques" course</span>
+                                </div>
+                                <span class="text-muted small">1 week ago</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-question-circle me-2"></i> Practice Quiz</h5>
+                    </div>
+                    <div class="card-body">
+                        <h6>Test your knowledge: Product Features</h6>
+                        <p class="text-muted">5 questions • Approximately 5 minutes</p>
+                        
+                        <div class="quiz-card bg-light p-3 mt-3">
+                            <p><strong>Question 1 of 5:</strong></p>
+                            <p>Which feature allows customers to analyze their usage patterns?</p>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="radio" name="q1" id="q1a">
+                                <label class="form-check-label" for="q1a">
+                                    Payment Processing
+                                </label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="radio" name="q1" id="q1b">
+                                <label class="form-check-label" for="q1b">
+                                    Analytics Dashboard
+                                </label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="radio" name="q1" id="q1c">
+                                <label class="form-check-label" for="q1c">
+                                    Mobile App
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="d-grid gap-2 mt-3">
+                            <button class="btn btn-primary">Continue Quiz</button>
+                            <button class="btn btn-outline-secondary">Generate New Quiz</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Simple script to simulate chat functionality
+    document.addEventListener('DOMContentLoaded', function() {
+        const inputField = document.querySelector('.chat-input input');
+        const sendButton = document.querySelector('.chat-input button');
+        const chatMessages = document.getElementById('chatMessages');
+        
+        sendButton.addEventListener('click', function() {
+            if (inputField.value.trim() === '') return;
+            
+            // Add user message
+            const userMessage = document.createElement('div');
+            userMessage.className = 'message message-user';
+            userMessage.innerHTML = `<p class="mb-0">${inputField.value}</p>`;
+            chatMessages.appendChild(userMessage);
+            
+            // Clear input field
+            inputField.value = '';
+            
+            // Scroll to bottom
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            // In a real app, you would send this to your API and get a response
+            // For demo purposes, we'll just simulate a response after a delay
+            setTimeout(function() {
+                const assistantMessage = document.createElement('div');
+                assistantMessage.className = 'message message-assistant';
+                assistantMessage.innerHTML = `
+                    <p class="mb-0">I've found some information that might help you with your question. 
+                    Would you like me to show you related courses or documents?</p>
+                `;
+                chatMessages.appendChild(assistantMessage);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }, 1000);
+        });
+        
+        // Allow Enter key to send message
+        inputField.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendButton.click();
+            }
+        });
+        
+        // Quick action buttons functionality
+        document.querySelectorAll('.quick-action-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                // In a real app, you would handle each action differently
+                // For demo purposes, we'll just add a message to the chat
+                if (this.textContent.includes('Ask a Question')) {
+                    inputField.focus();
+                } else {
+                    const action = this.textContent.trim();
+                    inputField.value = `I want to ${action.toLowerCase()}`;
+                    sendButton.click();
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

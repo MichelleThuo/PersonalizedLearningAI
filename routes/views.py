@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for
-from models import Course, CourseContent, Quiz
+from models import Course, CourseContent, Quiz, User, ChatSession
 
 views_bp = Blueprint('views', __name__)
 
@@ -114,3 +114,55 @@ def video_manager():
 def vector_db_status_page():
     """Vector database status page"""
     return render_template('vector_status.html')
+
+@views_bp.route('/user-interface')
+def user_interface():
+    """User-facing interface for learning and interacting with the AI assistant"""
+    user_id = request.args.get('user_id', 1)  # Default to user 1 for demonstration
+    
+    # Get user data
+    user = User.query.get(user_id)
+    
+    # Get courses for the user
+    courses = Course.query.all()
+    
+    # Get active courses (those with recent activity)
+    active_courses = []
+    if user:
+        # Get courses where the user has chat sessions
+        course_ids = [session.course_id for session in ChatSession.query.filter_by(user_id=user_id).all() if session.course_id]
+        active_courses = Course.query.filter(Course.id.in_(course_ids)).all() if course_ids else []
+    
+    # Get recommended courses - in a real app, this would use the recommendation service
+    recommended_courses = courses[:3] if courses else []
+    
+    return render_template('user_interface.html',
+                          user=user,
+                          active_courses=active_courses,
+                          all_courses=courses,
+                          recommended_courses=recommended_courses)
+
+@views_bp.route('/admin-dashboard')
+def admin_dashboard():
+    """Admin dashboard for managing the AI learning assistant"""
+    # Get all users
+    users = User.query.all()
+    
+    # Get all courses
+    courses = Course.query.all()
+    
+    # Get total chat sessions
+    total_chat_sessions = ChatSession.query.count()
+    
+    # Get recently active users
+    recent_users = User.query.join(ChatSession).order_by(ChatSession.start_time.desc()).limit(5).all()
+    
+    # Get all content
+    content = CourseContent.query.all()
+    
+    return render_template('admin_dashboard.html',
+                          users=users,
+                          courses=courses,
+                          total_chat_sessions=total_chat_sessions,
+                          recent_users=recent_users,
+                          content=content)

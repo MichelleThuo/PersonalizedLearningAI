@@ -31,22 +31,51 @@
                         <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/">Home</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if request.path == '/chat' %}active{% endif %}" href="/chat">Chat</a>
+                        <a class="nav-link {% if request.path == '/user-interface' %}active{% endif %}" href="/user-interface">
+                            <i class="fas fa-user-graduate me-1"></i> Learner Interface
+                        </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if request.path == '/search' %}active{% endif %}" href="/search">Search</a>
+                        <a class="nav-link {% if request.path == '/admin-dashboard' %}active{% endif %}" href="/admin-dashboard">
+                            <i class="fas fa-user-shield me-1"></i> Admin Dashboard
+                        </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.path == '/quiz' %}active{% endif %}" href="/quiz">Quizzes</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.path == '/h5p' %}active{% endif %}" href="/h5p">H5P Generator</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.path == '/video' %}active{% endif %}" href="/video">Video Manager</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.path == '/vector-status' %}active{% endif %}" href="/vector-status">Vector DB Status</a>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-tools me-1"></i> Features
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="navbarDropdown">
+                            <li>
+                                <a class="dropdown-item {% if request.path == '/chat' %}active{% endif %}" href="/chat">
+                                    <i class="fas fa-comment-dots me-2"></i> Chat
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item {% if request.path == '/search' %}active{% endif %}" href="/search">
+                                    <i class="fas fa-search me-2"></i> Search
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item {% if request.path == '/quiz' %}active{% endif %}" href="/quiz">
+                                    <i class="fas fa-question-circle me-2"></i> Quizzes
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item {% if request.path == '/h5p' %}active{% endif %}" href="/h5p">
+                                    <i class="fas fa-cube me-2"></i> H5P Generator
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item {% if request.path == '/video' %}active{% endif %}" href="/video">
+                                    <i class="fas fa-video me-2"></i> Video Manager
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item {% if request.path == '/vector-status' %}active{% endif %}" href="/vector-status">
+                                    <i class="fas fa-database me-2"></i> Vector DB Status
+                                </a>
+                            </li>
+                        </ul>
                     </li>
                 </ul>
             </div>
@@ -73,6 +102,8 @@
                     <h5>Quick Links</h5>
                     <ul class="list-unstyled">
                         <li><a href="/" class="text-white">Home</a></li>
+                        <li><a href="/user-interface" class="text-white">Learner Interface</a></li>
+                        <li><a href="/admin-dashboard" class="text-white">Admin Dashboard</a></li>
                         <li><a href="/chat" class="text-white">Ask a Question</a></li>
                         <li><a href="/search" class="text-white">Search Content</a></li>
                         <li><a href="/quiz" class="text-white">Take a Quiz</a></li>
